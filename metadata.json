@@ -1,0 +1,6 @@
+{
+  "name": "Form Persetujuan Imunisasi BIAS DT/Td - SDN Sumur Welut III/440",
+  "description": "Formulir digital persetujuan orang tua terhadap pelaksanaan Imunisasi BIAS DT/Td SDN Sumur Welut III/440 bersama Puskesmas Bangkingan Surabaya.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
