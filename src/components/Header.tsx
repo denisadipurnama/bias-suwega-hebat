@@ -1,12 +1,13 @@
 import React from 'react';
 import { OfficialLogo } from './OfficialLogo';
-import { Calendar, MapPin, Building2, Stethoscope, ShieldCheck, HeartHandshake } from 'lucide-react';
+import { Calendar, MapPin, Building2, Stethoscope, ShieldCheck, HeartHandshake, Lock, Unlock } from 'lucide-react';
 
 interface HeaderProps {
-  onOpenInfo?: () => void;
+  onOpenAdmin?: () => void;
+  isAdminLoggedIn?: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = () => {
+export const Header: React.FC<HeaderProps> = ({ onOpenAdmin, isAdminLoggedIn }) => {
   return (
     <header className="relative bg-gradient-to-b from-[#0F2B5C] via-[#153a7a] to-[#0F2B5C] text-white pt-6 pb-10 px-4 sm:px-6 lg:px-8 border-b-4 border-amber-400 shadow-xl overflow-hidden">
       {/* Decorative subtle background motifs */}
@@ -15,15 +16,41 @@ export const Header: React.FC<HeaderProps> = () => {
       <div className="absolute -bottom-16 -left-16 w-64 h-64 bg-amber-400/20 rounded-full blur-3xl pointer-events-none"></div>
 
       <div className="max-w-4xl mx-auto relative z-10">
-        {/* Top Bar with School Crest */}
+        {/* Top Bar with School Crest & Admin Login */}
         <div className="bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-5 shadow-lg border border-white/20 mb-6 text-slate-800">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <OfficialLogo size="md" />
-            <div className="flex items-center gap-2 self-start sm:self-auto bg-blue-50 border border-blue-200/80 px-3.5 py-1.5 rounded-xl">
-              <ShieldCheck className="w-4 h-4 text-blue-700 shrink-0" />
-              <span className="text-xs font-semibold text-blue-900 tracking-wide">
-                Bulan Imunisasi Anak Sekolah (BIAS)
-              </span>
+            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+              <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200/80 px-3 py-1.5 rounded-xl">
+                <ShieldCheck className="w-4 h-4 text-blue-700 shrink-0" />
+                <span className="text-xs font-semibold text-blue-900 tracking-wide">
+                  BIAS DT/Td
+                </span>
+              </div>
+
+              {onOpenAdmin && (
+                <button
+                  type="button"
+                  onClick={onOpenAdmin}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs ${
+                    isAdminLoggedIn
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      : 'bg-[#0F2B5C] hover:bg-[#153a7a] text-white hover:shadow-md'
+                  }`}
+                >
+                  {isAdminLoggedIn ? (
+                    <>
+                      <Unlock className="w-3.5 h-3.5 text-emerald-200" />
+                      <span>Panel Admin (Aktif)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Login Admin Sekolah</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>

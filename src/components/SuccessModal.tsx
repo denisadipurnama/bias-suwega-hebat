@@ -175,9 +175,13 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
 
             {/* Signature preview stamp */}
             <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+              <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>Status: Data Tersimpan Resmi</span>
+                <span>
+                  Status: {submission.statusPengiriman === 'Terkirim ke Google Sheets'
+                    ? 'Tersinkron ke Google Sheets'
+                    : 'Tersimpan Resmi di Sistem'}
+                </span>
               </div>
               {submission.tandaTanganUrl && (
                 <div className="text-right">

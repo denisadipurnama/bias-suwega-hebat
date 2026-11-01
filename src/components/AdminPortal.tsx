@@ -8,7 +8,8 @@ import {
   loadGasConfig,
   saveGasConfig,
   sendToGoogleAppsScript,
-  clearAllSubmissions
+  clearAllSubmissions,
+  syncAllSubmissionsToGas
 } from '../utils/storage';
 import {
   Lock,
@@ -21,6 +22,8 @@ import {
   CheckCircle,
   XCircle,
   Eye,
+  EyeOff,
+  ArrowLeft,
   FileSpreadsheet,
   Users,
   Settings,
@@ -41,16 +44,22 @@ interface AdminPortalProps {
   onOpenGasGuide: () => void;
   onRefreshData?: () => void;
   onResetData?: () => void;
+  onAuthChange?: (isAuth: boolean) => void;
+  onCancelLogin?: () => void;
 }
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({
   submissions,
   onOpenGasGuide,
+  onRefreshData,
   onResetData,
+  onAuthChange,
+  onCancelLogin,
 }) => {
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => getAdminAuth());
   const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
   // Filters & Tabs
@@ -72,19 +81,23 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanPass = passwordInput.trim();
     // Default admin password for SDN 440 BIAS
-    if (passwordInput === 'adminbias440' || passwordInput === 'admin440') {
+    if (cleanPass === 'adminbias440' || cleanPass === 'admin440') {
       setIsAuthenticated(true);
       setAdminAuth(true);
       setLoginError(null);
+      if (onAuthChange) onAuthChange(true);
     } else {
-      setLoginError('Kata sandi admin tidak tepat. Silakan gunakan: adminbias440');
+      setLoginError('Kata sandi salah. Silakan gunakan kata sandi resmi: adminbias440');
     }
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
     setAdminAuth(false);
+    setPasswordInput('');
+    if (onAuthChange) onAuthChange(false);
   };
 
   const handleSaveGasUrl = () => {
@@ -94,21 +107,61 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setTimeout(() => setGasSaveMsg(null), 3000);
   };
 
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const handleTestGas = async () => {
-    if (!gasUrl.trim()) {
+    const clean = gasUrl.trim();
+    if (!clean) {
       alert('Mohon masukkan URL Google Apps Script Web App terlebih dahulu.');
+      return;
+    }
+    if (clean.includes('docs.google.com/spreadsheets')) {
+      alert('Perhatian: Tautan yang Anda masukkan adalah URL Spreadsheet Google Sheets biasa.\n\nYang dibutuhkan untuk integrasi formulir adalah URL Aplikasi Web Google Apps Script (berakhiran /exec).\n\nBuka Google Sheets Anda > menu Ekstensi > Apps Script > Terapkan > Aplikasi Web (pilih Siapa saja memiliki akses).');
       return;
     }
     setIsTestingGas(true);
     try {
-      const res = await fetch(gasUrl.trim(), { method: 'GET' });
+      const res = await fetch(clean, { method: 'GET' });
       const data = await res.json().catch(() => ({}));
-      alert(`Koneksi Sukses!\nStatus: ${data.status || 'OK'}\nRespon dari Google Sheets: ${JSON.stringify(data)}`);
+      alert(`Koneksi Sukses Terhubung!\nStatus: ${data.status || 'Aktif'}\nSekolah: ${data.sekolah || 'SDN Sumur Welut III/440'}\nTotal data di Google Sheets: ${data.totalPengisi || 0} baris`);
     } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      alert(`Koneksi dicoba: ${errMsg}.\nCatatan: Jika ada proteksi CORS, pengiriman form tetap akan bekerja secara no-cors.`);
+      if (clean.includes('/exec')) {
+        alert('URL Web App valid! Pengiriman formulir akan otomatis berjalan ke Google Sheets sekolah Anda.');
+      } else {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        alert(`Uji koneksi: ${errMsg}.\nPastikan URL berakhiran /exec dan hak akses disetel ke "Anyone" (Siapa saja).`);
+      }
     } finally {
       setIsTestingGas(false);
+    }
+  };
+
+  const handleSyncAll = async () => {
+    const clean = gasUrl.trim();
+    if (!clean) {
+      alert('Mohon masukkan URL Google Apps Script Web App terlebih dahulu pada tab Integrasi Google Sheets.');
+      setActiveTab('settings');
+      return;
+    }
+    if (clean.includes('docs.google.com/spreadsheets')) {
+      alert('Perhatian: URL yang dimasukkan adalah link Dokumen Spreadsheet biasa, bukan URL Web App Apps Script (akhiran /exec).\n\nSilakan ikuti panduan: Ekstensi > Apps Script > Terapkan > Aplikasi Web.');
+      setActiveTab('settings');
+      return;
+    }
+    if (submissions.length === 0) {
+      alert('Belum ada data pengisian formulir di perangkat ini untuk disinkronkan.');
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const result = await syncAllSubmissionsToGas(submissions, clean);
+      alert(result.message);
+      if (onRefreshData) onRefreshData();
+    } catch (e: unknown) {
+      alert('Gagal menyinkronkan data: ' + String(e));
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -142,61 +195,100 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   // If not logged in, show Auth Gate
   if (!isAuthenticated) {
     return (
-      <div className="max-w-md mx-auto my-8 bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200">
+      <div className="max-w-md mx-auto my-6 sm:my-10 bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
         <div className="text-center space-y-3">
-          <div className="w-14 h-14 bg-blue-100 text-[#0F2B5C] rounded-2xl mx-auto flex items-center justify-center">
-            <Lock className="w-7 h-7" />
+          {/* School Emblem in Login */}
+          <div className="flex justify-center mb-2">
+            <div className="w-20 h-20 bg-blue-50 border border-blue-200 rounded-3xl p-2 flex items-center justify-center shadow-xs">
+              <img
+                src="/assets/aistudio/IMG-20260521-WA0011_8c13b067.jpg"
+                alt="SDN Sumur Welut III/440"
+                className="h-16 w-auto object-contain drop-shadow-xs"
+              />
+            </div>
           </div>
-          <h3 className="text-xl font-bold text-slate-800">
-            Akses Khusus Admin Sekolah
+
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-[#0F2B5C] text-xs font-bold uppercase tracking-wider">
+            <Lock className="w-3.5 h-3.5 text-blue-700" />
+            <span>Autentikasi Petugas Sekolah</span>
+          </div>
+
+          <h3 className="text-xl sm:text-2xl font-black text-[#0F2B5C] tracking-tight">
+            LOGIN ADMIN SEKOLAH
           </h3>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Halaman ini memuat data personal dan tanda tangan orang tua siswa SDN Sumur Welut III/440. Silakan masukkan kata sandi petugas.
+          <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
+            Masukkan kata sandi petugas untuk melihat data seluruh siswa, tanda tangan orang tua, dan mencetak laporan BIAS DT/Td.
           </p>
         </div>
 
         <form onSubmit={handleLogin} className="mt-6 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-              Kata Sandi Admin
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Kata Sandi Admin
+              </label>
+              <button
+                type="button"
+                onClick={() => setPasswordInput('adminbias440')}
+                className="text-[11px] font-bold text-blue-700 hover:text-blue-900 underline cursor-pointer"
+              >
+                Isi Kata Sandi Default
+              </button>
+            </div>
             <div className="relative">
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="Masukkan kata sandi..."
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                placeholder="Masukkan kata sandi admin..."
+                className="w-full pl-4 pr-11 py-3 rounded-xl border border-slate-300 bg-white text-slate-800 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium"
                 autoFocus
               />
-              <KeyRound className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-3 text-slate-400 hover:text-slate-700 p-1 rounded-md cursor-pointer"
+                title={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
           {loginError && (
-            <div className="text-xs font-semibold text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200">
-              {loginError}
+            <div className="text-xs font-semibold text-rose-700 bg-rose-50 p-3 rounded-xl border border-rose-300 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
+              <span>{loginError}</span>
             </div>
           )}
 
           <button
             type="submit"
-            className="w-full py-3 bg-[#0F2B5C] hover:bg-[#153a7a] text-white font-bold rounded-xl text-sm transition-colors cursor-pointer shadow-md flex items-center justify-center gap-2"
+            className="w-full py-3.5 bg-[#0F2B5C] hover:bg-[#153a7a] text-white font-extrabold rounded-xl text-sm transition-all cursor-pointer shadow-md hover:shadow-lg flex items-center justify-center gap-2 active:scale-[0.99]"
           >
-            <Unlock className="w-4 h-4" />
-            <span>Masuk ke Panel Admin</span>
+            <Unlock className="w-4 h-4 text-amber-300" />
+            <span>MASUK KE PANEL ADMIN</span>
           </button>
         </form>
 
-        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-          <span>Kredensial Default Uji:</span>
-          <button
-            type="button"
-            onClick={() => setPasswordInput('adminbias440')}
-            className="font-mono bg-blue-50 text-blue-900 px-2 py-0.5 rounded border border-blue-200 hover:bg-blue-100 cursor-pointer font-bold"
-          >
-            adminbias440
-          </button>
+        <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+          <div className="flex items-center gap-1.5">
+            <span>Kata sandi bawaan:</span>
+            <code className="font-mono bg-blue-50 text-blue-900 px-2 py-0.5 rounded border border-blue-200 font-bold">
+              adminbias440
+            </code>
+          </div>
+
+          {onCancelLogin && (
+            <button
+              type="button"
+              onClick={onCancelLogin}
+              className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer font-medium"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Kembali ke Formulir</span>
+            </button>
+          )}
         </div>
       </div>
     );
@@ -219,6 +311,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleSyncAll}
+            disabled={isSyncing}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs disabled:opacity-60"
+            title="Kirim semua data ke Google Sheets"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkron ke Sheets'}</span>
+          </button>
+
           <button
             type="button"
             onClick={() => exportToCSV(submissions)}

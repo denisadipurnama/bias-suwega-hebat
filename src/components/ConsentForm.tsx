@@ -8,6 +8,7 @@ import {
   sendToGoogleAppsScript,
   loadGasConfig
 } from '../utils/storage';
+import { GoogleSheetsConnectModal } from './GoogleSheetsConnectModal';
 import {
   User,
   GraduationCap,
@@ -18,7 +19,9 @@ import {
   Send,
   Loader2,
   ShieldAlert,
-  Info
+  Info,
+  FileSpreadsheet,
+  Link2
 } from 'lucide-react';
 
 interface ConsentFormProps {
@@ -38,6 +41,10 @@ export const ConsentForm: React.FC<ConsentFormProps> = ({
   const [alasanMenolak, setAlasanMenolak] = useState('');
   const [tandaTanganUrl, setTandaTanganUrl] = useState<string | null>(null);
   const [isStatementAgreed, setIsStatementAgreed] = useState(false);
+
+  // Google Sheets Connection State
+  const [gasConfig, setGasConfig] = useState(() => loadGasConfig());
+  const [isGasModalOpen, setIsGasModalOpen] = useState(false);
 
   // Status & Validation State
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -128,12 +135,11 @@ export const ConsentForm: React.FC<ConsentFormProps> = ({
       };
 
       // 4. Send to Google Sheets if GAS configured
-      const gasConfig = loadGasConfig();
-      if (gasConfig.webAppUrl) {
-        const gasResult = await sendToGoogleAppsScript(newSubmission, gasConfig.webAppUrl);
+      const currentGas = loadGasConfig();
+      if (currentGas.webAppUrl && currentGas.webAppUrl.trim().startsWith('http')) {
+        const gasResult = await sendToGoogleAppsScript(newSubmission, currentGas.webAppUrl);
         if (gasResult.success) {
           newSubmission.statusPengiriman = 'Terkirim ke Google Sheets';
-          newSubmission.gasRowIndex = gasResult.rowIndex;
         }
       }
 
@@ -171,6 +177,30 @@ export const ConsentForm: React.FC<ConsentFormProps> = ({
         <p className="text-xs sm:text-sm text-slate-500 mt-1">
           Silakan mengisi data siswa dan keputusan orang tua dengan jujur dan lengkap di bawah ini.
         </p>
+
+        {/* Google Sheets Connection Status Bar */}
+        <div className="mt-4 pt-3 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          {gasConfig.webAppUrl ? (
+            <div className="flex items-center gap-2 text-emerald-800 font-semibold bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Google Sheets Terhubung (Realtime)</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-amber-900 font-medium bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Google Sheets sekolah belum disambungkan.</span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsGasModalOpen(true)}
+            className="text-xs font-bold text-[#0F2B5C] hover:text-blue-700 underline flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-blue-700" />
+            <span>{gasConfig.webAppUrl ? 'Ubah / Uji URL Spreadsheet' : 'Sambungkan ke Google Sheets'}</span>
+          </button>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-8">
@@ -500,6 +530,13 @@ export const ConsentForm: React.FC<ConsentFormProps> = ({
           </p>
         </div>
       </form>
+
+      {/* Google Sheets Quick Connect Modal */}
+      <GoogleSheetsConnectModal
+        isOpen={isGasModalOpen}
+        onClose={() => setIsGasModalOpen(false)}
+        onConfigSaved={() => setGasConfig(loadGasConfig())}
+      />
     </div>
   );
 };

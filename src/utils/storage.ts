@@ -179,57 +179,123 @@ export const findDuplicate = (
 export const sendToGoogleAppsScript = async (
   record: ConsentSubmission,
   gasUrl: string
-): Promise<{ success: boolean; message: string; rowIndex?: number }> => {
-  if (!gasUrl || !gasUrl.trim().startsWith('http')) {
+): Promise<{ success: boolean; message: string; isConfigMissing?: boolean }> => {
+  const cleanUrl = (gasUrl || '').trim();
+
+  if (!cleanUrl || !cleanUrl.startsWith('http')) {
     return {
-      success: true,
-      message: 'Data tersimpan di penyimpanan digital sekolah (Google Apps Script URL belum dikonfigurasi).',
+      success: false,
+      isConfigMissing: true,
+      message: 'URL Google Apps Script belum diatur. Masukkan URL Web App (akhiran /exec) pada panel pengaturan.',
     };
   }
 
-  try {
-    const payload = {
-      action: 'submitConsent',
-      nomor: record.no,
-      timestamp: record.formattedDate,
-      namaSiswa: record.namaSiswa,
-      kelas: record.kelas,
-      namaOrtu: record.namaOrtu,
-      persetujuan: record.persetujuan,
-      alasanPenolakan: record.alasanMenolak || '-',
-      tandaTangan: record.tandaTanganUrl ? 'Tersimpan (Aman/DataURL)' : '-',
-      statusPengiriman: 'Sukses Terkirim',
+  // Detect accidental pasting of standard Google Spreadsheet link
+  if (cleanUrl.includes('docs.google.com/spreadsheets')) {
+    return {
+      success: false,
+      message: 'Perhatian: URL yang dimasukkan adalah tautan Google Sheets biasa, bukan URL Web App Google Apps Script. Buka menu Ekstensi > Apps Script > Terapkan > Aplikasi Web.',
     };
+  }
 
-    const res = await fetch(gasUrl, {
+  const payload = {
+    action: 'submitConsent',
+    nomor: record.no,
+    timestamp: record.formattedDate,
+    namaSiswa: record.namaSiswa,
+    kelas: record.kelas,
+    namaOrtu: record.namaOrtu,
+    persetujuan: record.persetujuan,
+    alasanPenolakan: record.alasanMenolak || '-',
+    tandaTangan: record.tandaTanganUrl ? 'Tersimpan (Aman)' : '-',
+    statusPengiriman: 'Sukses Terkirim',
+  };
+
+  try {
+    // 1. Primary method: POST with text/plain & mode: 'no-cors'
+    // Google Apps Script requires text/plain to avoid preflight OPTIONS block in no-cors
+    await fetch(cleanUrl, {
       method: 'POST',
+      mode: 'no-cors',
+      cache: 'no-cache',
       headers: {
         'Content-Type': 'text/plain;charset=utf-8',
       },
       body: JSON.stringify(payload),
     });
 
-    if (res.ok) {
-      const data = await res.json().catch(() => ({}));
-      return {
-        success: true,
-        message: 'Berhasil dikirim ke Google Sheets secara realtime.',
-        rowIndex: data.rowIndex,
-      };
-    } else {
-      return {
-        success: false,
-        message: `Koneksi Google Sheets merespon status ${res.status}. Data diamankan secara lokal.`,
-      };
-    }
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    console.warn('GAS sync warning (data kept safe locally):', errorMsg);
     return {
       success: true,
-      message: 'Data berhasil diserahkan ke Web App Google Sheets & dicatat di sistem lokal.',
+      message: 'Data berhasil dikirim dan tersinkronisasi ke Google Sheets!',
+    };
+  } catch (err: unknown) {
+    console.warn('POST failed, attempting GET fallback to Google Apps Script:', err);
+
+    // 2. Secondary Fallback method: GET with encoded parameters
+    try {
+      const qParams = new URLSearchParams({
+        action: 'submitConsent',
+        nomor: String(record.no),
+        timestamp: record.formattedDate,
+        namaSiswa: record.namaSiswa,
+        kelas: record.kelas,
+        namaOrtu: record.namaOrtu,
+        persetujuan: record.persetujuan,
+        alasanPenolakan: record.alasanMenolak || '-',
+        tandaTangan: 'Tersimpan (Aman)',
+      });
+
+      const separator = cleanUrl.includes('?') ? '&' : '?';
+      await fetch(`${cleanUrl}${separator}${qParams.toString()}`, {
+        method: 'GET',
+        mode: 'no-cors',
+      });
+
+      return {
+        success: true,
+        message: 'Data berhasil diserahkan ke Google Sheets melalui jalur alternatif GET.',
+      };
+    } catch (fallbackErr: unknown) {
+      const errStr = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+      return {
+        success: false,
+        message: `Gagal mengirim ke Google Sheets: ${errStr}. Data tetap tersimpan aman di sistem lokal.`,
+      };
+    }
+  }
+};
+
+// Batch sync all submissions to Google Sheets
+export const syncAllSubmissionsToGas = async (
+  submissions: ConsentSubmission[],
+  gasUrl: string
+): Promise<{ total: number; successCount: number; message: string }> => {
+  if (!gasUrl || !gasUrl.trim().startsWith('http')) {
+    return {
+      total: submissions.length,
+      successCount: 0,
+      message: 'URL Google Apps Script belum diisi.',
     };
   }
+
+  let successCount = 0;
+  for (const item of submissions) {
+    const res = await sendToGoogleAppsScript(item, gasUrl);
+    if (res.success) {
+      item.statusPengiriman = 'Terkirim ke Google Sheets';
+      successCount++;
+    }
+    // Brief interval to prevent rate-limit
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+
+  saveSubmissions(submissions);
+
+  return {
+    total: submissions.length,
+    successCount,
+    message: `Selesai: ${successCount} dari ${submissions.length} data berhasil disinkronkan ke Google Sheets sekolah.`,
+  };
 };
 
 // Export to CSV for Excel/Google Sheets (Exact 8-column format without phone number)

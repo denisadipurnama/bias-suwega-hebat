@@ -17,11 +17,13 @@ import {
 interface PublicRecapProps {
   stats: OverallStatistics;
   onNavigateToForm?: () => void;
+  onNavigateToAdmin?: () => void;
 }
 
 export const PublicRecap: React.FC<PublicRecapProps> = ({
   stats,
   onNavigateToForm,
+  onNavigateToAdmin,
 }) => {
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
@@ -310,14 +312,26 @@ export const PublicRecap: React.FC<PublicRecapProps> = ({
             </div>
           </div>
 
-          {onNavigateToForm && (
-            <button
-              onClick={onNavigateToForm}
-              className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-900 font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer shrink-0 shadow-md"
-            >
-              Isi Formulir Siswa
-            </button>
-          )}
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+            {onNavigateToAdmin && (
+              <button
+                onClick={onNavigateToAdmin}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider border border-slate-600 transition-colors cursor-pointer shadow-sm flex items-center gap-1.5"
+              >
+                <Lock className="w-3.5 h-3.5 text-amber-300" />
+                <span>Login Admin</span>
+              </button>
+            )}
+
+            {onNavigateToForm && (
+              <button
+                onClick={onNavigateToForm}
+                className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-900 font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer shadow-md"
+              >
+                Isi Formulir Siswa
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

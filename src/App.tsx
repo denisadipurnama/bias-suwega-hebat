@@ -10,7 +10,8 @@ import {
   loadSubmissions,
   saveSubmissions,
   calculateStatistics,
-  loadGasConfig
+  loadGasConfig,
+  getAdminAuth
 } from './utils/storage';
 import {
   FileText,
@@ -21,7 +22,8 @@ import {
   HeartHandshake,
   CheckCircle,
   ExternalLink,
-  Info
+  Info,
+  Lock
 } from 'lucide-react';
 
 export default function App() {
@@ -30,12 +32,14 @@ export default function App() {
   const [stats, setStats] = useState<OverallStatistics | null>(null);
   const [successSubmission, setSuccessSubmission] = useState<ConsentSubmission | null>(null);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => getAdminAuth());
 
   // Load existing submissions on mount
   useEffect(() => {
     const data = loadSubmissions();
     setSubmissions(data);
     setStats(calculateStatistics(data));
+    setIsAdminLoggedIn(getAdminAuth());
   }, []);
 
   // Update statistics whenever submissions change
@@ -51,13 +55,19 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-100 via-blue-50/20 to-slate-100 text-slate-800 flex flex-col font-sans selection:bg-[#0F2B5C] selection:text-white">
-      {/* Official Header */}
-      <Header />
+      {/* Official Header with direct Login Admin button */}
+      <Header
+        onOpenAdmin={() => {
+          setActiveTab('admin');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        isAdminLoggedIn={isAdminLoggedIn}
+      />
 
       {/* Primary Navigation Tabs */}
       <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 flex items-center justify-between">
-          <div className="flex items-center gap-1 sm:gap-2 py-2 overflow-x-auto">
+          <div className="flex items-center gap-1.5 sm:gap-2 py-2 overflow-x-auto">
             {/* Tab 1: Formulir Persetujuan */}
             <button
               type="button"
@@ -89,18 +99,30 @@ export default function App() {
               </span>
             </button>
 
-            {/* Tab 3: Portal Admin Sekolah */}
+            {/* Tab 3: Portal Admin Sekolah / Login Admin */}
             <button
               type="button"
               onClick={() => setActiveTab('admin')}
               className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'admin'
-                  ? 'bg-[#0F2B5C] text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  ? 'bg-[#0F2B5C] text-white shadow-sm ring-2 ring-blue-400'
+                  : isAdminLoggedIn
+                  ? 'text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200'
+                  : 'text-[#0F2B5C] bg-blue-50/90 hover:bg-blue-100 border border-blue-200'
               }`}
             >
-              <ShieldAlert className="w-4 h-4" />
-              <span>Admin Sekolah</span>
+              {isAdminLoggedIn ? (
+                <>
+                  <ShieldAlert className="w-4 h-4 text-emerald-600" />
+                  <span>Panel Admin</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-4 h-4 text-amber-600" />
+                  <span>Login Admin</span>
+                </>
+              )}
             </button>
           </div>
 
@@ -133,6 +155,10 @@ export default function App() {
           <PublicRecap
             stats={currentStats}
             onNavigateToForm={() => setActiveTab('form')}
+            onNavigateToAdmin={() => {
+              setActiveTab('admin');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
           />
         )}
 
@@ -149,6 +175,8 @@ export default function App() {
               setSubmissions([]);
               setStats(calculateStatistics([]));
             }}
+            onAuthChange={(auth) => setIsAdminLoggedIn(auth)}
+            onCancelLogin={() => setActiveTab('form')}
           />
         )}
       </main>
@@ -166,15 +194,23 @@ export default function App() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-center md:justify-end gap-3">
+            <button
+              onClick={() => {
+                setActiveTab('admin');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-slate-700 font-semibold cursor-pointer transition-colors"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>{isAdminLoggedIn ? 'Panel Admin Sekolah' : 'Login Admin Sekolah'}</span>
+            </button>
             <button
               onClick={() => setIsGuideOpen(true)}
               className="text-amber-400 hover:text-amber-300 underline font-semibold cursor-pointer"
             >
               Unduh Code.gs &amp; Panduan Integrasi
             </button>
-            <span>&bull;</span>
-            <span className="text-slate-400">Pusat Bantuan Sekolah</span>
           </div>
         </div>
         <div className="max-w-4xl mx-auto mt-6 pt-4 border-t border-slate-800 text-center text-[11px] text-slate-500">

@@ -17,13 +17,13 @@
  *    - Jalankan sebagai (Execute as): Saya (Me)
  *    - Siapa yang memiliki akses (Who has access): Siapa saja (Anyone) -> PENTING!
  * 9. Klik "Terapkan" (Deploy), berikan izin Google (Review Permissions > Advanced > Go to...).
- * 10. Salin URL Aplikasi Web (akhiran /exec) dan tempelkan di Pengaturan Admin Website.
+ * 10. Salin URL Aplikasi Web (akhiran /exec) dan tempelkan pada website.
  */
 
 const SHEET_NAME = "Persetujuan_BIAS";
 
 /**
- * Inisialisasi awal struktur sheet dan format kolom
+ * Inisialisasi awal struktur sheet dan format 9 kolom resmi
  */
 function setupSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -75,21 +75,10 @@ function setupSheet() {
 }
 
 /**
- * Menangani HTTP POST Request dari Form Persetujuan
+ * Logika Bersama untuk memproses penyimpanan data persetujuan (baik POST maupun GET)
  */
-function doPost(e) {
+function handleRecordSubmission(payload) {
   try {
-    let payload;
-    if (e.postData && e.postData.contents) {
-      try {
-        payload = JSON.parse(e.postData.contents);
-      } catch (err) {
-        payload = e.parameter;
-      }
-    } else {
-      payload = e.parameter;
-    }
-    
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SHEET_NAME);
     if (!sheet) {
@@ -139,7 +128,7 @@ function doPost(e) {
           return ContentService.createTextOutput(JSON.stringify({
             status: "success",
             action: "updated",
-            message: "Data persetujuan siswa " + namaSiswa + " (" + kelas + ") berhasil diperbarui.",
+            message: "Data persetujuan siswa " + namaSiswa + " (" + kelas + ") berhasil diperbarui di Google Sheets.",
             row: targetRow
           })).setMimeType(ContentService.MimeType.JSON);
         }
@@ -167,7 +156,7 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       action: "created",
-      message: "Terima kasih! Data persetujuan imunisasi telah berhasil dikirim ke Google Sheets.",
+      message: "Terima kasih! Data persetujuan imunisasi telah berhasil dikirim ke Google Sheets sekolah.",
       nomorUrut: nomorUrut,
       row: currentRow
     })).setMimeType(ContentService.MimeType.JSON);
@@ -195,7 +184,7 @@ function formatRowStyle(sheet, rowIdx, persetujuan) {
     persetujuanCell.setBackground("#FEE2E2").setFontColor("#B91C1C").setFontWeight("bold");
   }
   
-  // Tengah untuk nomor, kelas, persetujuan, status
+  // Rata tengah
   sheet.getRange(rowIdx, 1).setHorizontalAlignment("center");
   sheet.getRange(rowIdx, 4).setHorizontalAlignment("center");
   sheet.getRange(rowIdx, 6).setHorizontalAlignment("center");
@@ -203,9 +192,31 @@ function formatRowStyle(sheet, rowIdx, persetujuan) {
 }
 
 /**
- * Menangani HTTP GET Request untuk Uji Koneksi & Statistik Agregat
+ * Menangani HTTP POST Request dari Form Persetujuan
+ */
+function doPost(e) {
+  let payload = {};
+  if (e && e.postData && e.postData.contents) {
+    try {
+      payload = JSON.parse(e.postData.contents);
+    } catch (err) {
+      payload = e.parameter || {};
+    }
+  } else if (e && e.parameter) {
+    payload = e.parameter;
+  }
+  return handleRecordSubmission(payload);
+}
+
+/**
+ * Menangani HTTP GET Request untuk Uji Koneksi / Fallback Submission
  */
 function doGet(e) {
+  // Jika dipanggil dengan action submitConsent melalui GET
+  if (e && e.parameter && (e.parameter.action === 'submitConsent' || e.parameter.namaSiswa)) {
+    return handleRecordSubmission(e.parameter);
+  }
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(SHEET_NAME);
   
@@ -244,7 +255,6 @@ function doGet(e) {
     });
   }
   
-  // Mengembalikan data statistik publik murni tanpa membocorkan nama & data pribadi
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
     sekolah: "SDN Sumur Welut III/440",
